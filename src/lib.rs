@@ -90,19 +90,34 @@ fn sort_array(data: &mut [u8], width: usize, height: usize, coords: Vec<(usize, 
 // break up array based on brightness
 // keep adding pixels to the current array until the brightness is less than the threshold
 // then start a new array
-fn break_array(data: &[u8], width: usize, height: usize, coords: Vec<(usize, usize)>, threshold: u16) -> Vec<Vec<(usize, usize)>> {
+fn break_array(data: &[u8], width: usize, height: usize, coords: Vec<(usize, usize)>, threshold: u16, invert: bool) -> Vec<Vec<(usize, usize)>> {
     let mut arrays = Vec::new();
     let mut current_array = Vec::new();
-    for (x, y) in coords.iter() {
-        let pixel = get_pixel(data, width, *x, *y);
-        let brightness = (pixel[0] as u16 + pixel[1] as u16 + pixel[2] as u16) / 3;
-        if brightness < threshold {
-            if current_array.len() > 0 {
-                arrays.push(current_array);
-                current_array = Vec::new();
+    if invert {
+        for (x, y) in coords.iter() {
+            let pixel = get_pixel(data, width, *x, *y);
+            let brightness = (pixel[0] as u16 + pixel[1] as u16 + pixel[2] as u16) / 3;
+            if brightness >= threshold {
+                if current_array.len() > 0 {
+                    arrays.push(current_array);
+                    current_array = Vec::new();
+                }
+            } else {
+                current_array.push((*x, *y));
             }
-        } else {
-            current_array.push((*x, *y));
+        }
+    } else {
+        for (x, y) in coords.iter() {
+            let pixel = get_pixel(data, width, *x, *y);
+            let brightness = (pixel[0] as u16 + pixel[1] as u16 + pixel[2] as u16) / 3;
+            if brightness < threshold {
+                if current_array.len() > 0 {
+                    arrays.push(current_array);
+                    current_array = Vec::new();
+                }
+            } else {
+                current_array.push((*x, *y));
+            }
         }
     }
     arrays.push(current_array);
@@ -193,17 +208,19 @@ pub struct SortConfig {
     height: usize,
     threshold: u16,
     angle: u16,
+    invert: bool,
 }
 
 #[wasm_bindgen]
 impl SortConfig {
     #[wasm_bindgen(constructor)]
-    pub fn new(width: usize, height: usize, threshold: u16, angle: u16) -> Self {
+    pub fn new(width: usize, height: usize, threshold: u16, angle: u16, invert: bool) -> Self {
         Self {
             width,
             height,
             threshold,
             angle,
+            invert,
         }
     }
 }
@@ -214,13 +231,15 @@ pub fn sort(data: &[u8], config: &SortConfig) -> Vec<u8> {
     let height = config.height;
     let threshold = config.threshold;
     let angle = config.angle; // 0 - 360
+    let invert = config.invert;
+
     let mut finished = vec![0; data.len()]; // Create a new buffer
 
     finished.copy_from_slice(data); // Copy the original data into the new buffer
 
     let bresenham = rotate_grid(width, height, angle);
     for array in bresenham.iter() {
-        let broken = break_array(&finished, width, height, array.clone(), threshold);
+        let broken = break_array(&finished, width, height, array.clone(), threshold, invert);
         for broken_array in broken.iter() {
             sort_array(&mut finished, width, height, broken_array.clone());
         }

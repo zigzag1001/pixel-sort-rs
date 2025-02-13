@@ -5,6 +5,7 @@
 	<input type="file" id="upload" accept="image/*">
 	<input type="range" id="threshold" min="0" max="255" value="128">
 	<input type="range" id="angle" min="0" max="360" value="10">
+	<input type="checkbox" id="invert">
 	<input type="button" id="sort" value="Sort">
 	<canvas id="canvas" style="max-width: 100%; max-height: 100%;"></canvas>
 
@@ -25,13 +26,15 @@
 
 			const threshold = document.getElementById("threshold").value;
 			const angle = document.getElementById("angle").value;
+			const invert = document.getElementById("invert").checked;
 
 			console.log(angle);
 			const SortConfig = new pixel_sort_rs.SortConfig(
 				ogImage.width,
 				ogImage.height,
 				threshold,
-				angle
+				angle,
+				invert
 			);
 			const flippedData = pixel_sort_rs.sort(ogImageData.data, SortConfig);
 			const outputImageData = new ImageData(
