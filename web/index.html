@@ -1,4 +1,138 @@
 <!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="description" content="Pixel Sorter, written in Rust, using WASM for browser">
+	<title>Pixel Sort Rs Wasm</title>
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			text-align: center;
+		}
+
+		#output {
+			max-width: 100%;
+		}
+	</style>
+</head>
+
+<style>
+	html {
+		scrollbar-width: none;
+		-ms-overflow-style: none;
+	}
+
+	::-webkit-scrollbar {
+		width: 0;
+	}
+
+	.controls {
+		margin: 0 auto;
+		max-width: 400px;
+		text-align: left;
+		font-size: 19px;
+		position: absolute;
+		z-index: 1;
+		background: rgba(215, 215, 215, 0.3);
+		padding: 15px;
+		font-weight: bold;
+		transition: background 0.3s;
+	}
+
+	.controls:hover {
+		background: rgba(215, 215, 215, 0.6);
+	}
+
+	.controls * {
+		margin: 5px;
+		zoom: 1.25;
+	}
+
+	.highlight {
+		background: rgba(130, 130, 130, 0.3);
+		transition: background 0.3s, border-color 0.3s;
+		border: outset;
+		border-color: lightgray;
+	}
+
+	.controls:hover .highlight {
+		background: rgba(130, 130, 130, 0.7);
+		border-color: gray;
+	}
+
+	.controls .wrap input {
+		appearance: auto;
+	}
+
+	.img-container {
+		display: flex;
+		justify-content: center;
+		top: 0;
+		left: 50%;
+		position: fixed;
+		width: 100%;
+		height: 100%;
+		transform: translateX(-50%);
+	}
+
+	.outputimg {
+		max-width: 100%;
+		max-height: 100%;
+	}
+
+	.img-container {
+		opacity: 0;
+		transition: opacity 0.5s ease-out;
+	}
+
+	.progress {
+		position: absolute;
+		top: 66px;
+		right: 90px;
+		font-size: xx-large;
+		font-weight: bold;
+	}
+</style>
+
+<style>
+	/* Tooltip container */
+	.tooltip {
+		position: relative;
+		display: inline-block;
+		border-bottom: 1px dotted black;
+		/* If you want dots under the hoverable text */
+	}
+
+	/* Tooltip text */
+	.tooltip .tooltiptext {
+		opacity: 0.85;
+		visibility: hidden;
+		width: 120px;
+		background-color: black;
+		color: #fff;
+		text-align: center;
+		padding: 5px;
+		border-radius: 6px;
+
+		/* Position the tooltip text - see examples below! */
+		position: absolute;
+		z-index: 1;
+		font-weight: initial;
+		zoom: 1;
+		top: -9px;
+		left: 105%;
+	}
+
+	/* Show the tooltip text when you mouse over the tooltip container */
+	.tooltip:hover .tooltiptext {
+		visibility: visible;
+	}
+</style>
+
+<link rel="stylesheet" href="https://unpkg.com/98.css@0.1.4/build/98.css" />
+<script src="./gif_js/gif.js"></script>
 
 <body>
 
@@ -7,17 +141,20 @@
 	<input type="range" id="angle" min="0" max="360" value="10">
 	<input type="checkbox" id="invert">
 	<input type="button" id="sort" value="Sort">
+	<canvas id="histogram" width="256" height="100"></canvas>
+	<canvas id="angleCircle" width="100" height="100"></canvas>
 	<canvas id="canvas" style="max-width: 100%; max-height: 100%;"></canvas>
 
 	<script type="module">
 
 		const pixel_sort_rs = await import('./pkg/pixel_sort_rs.js');
 		await pixel_sort_rs.default();
+
+		const ogCanvas = document.createElement("canvas");
 		var ogImage = new Image();
 
 		function sort_image(ctx, ogImage) {
 			if (!ogImage.src) return;
-			const ogCanvas = document.createElement("canvas");
 			const ogCtx = ogCanvas.getContext("2d");
 			ogCanvas.width = ogImage.width;
 			ogCanvas.height = ogImage.height;
@@ -45,11 +182,59 @@
 			ctx.putImageData(outputImageData, 0, 0);
 		}
 
+		let histogram = new Array(256).fill(0);
+
+		// luma = 0.299*red + 0.587*green + 0.114*blue
+		function gen_histogram(imageData) {
+			histogram = new Array(256).fill(0);
+			for (let i = 0; i < imageData.data.length; i += 4) {
+				const luma = 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2];
+				histogram[Math.floor(luma)]++;
+			}
+		}
+
+		function draw_histogram(ctx) {
+			const threshold = document.getElementById("threshold").value;
+			const invert = document.getElementById("invert").checked;
+
+			ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+			const max = Math.max(...histogram);
+			const scale = 100 / max;
+			for (let i = 0; i < histogram.length; i++) {
+				if (invert && i < threshold) {
+					ctx.fillStyle = `rgb(255, 0, 0)`;
+				} else if (!invert && i >= threshold) {
+					ctx.fillStyle = `rgb(255, 0, 0)`;
+				} else {
+					ctx.fillStyle = `rgb(0, 0, 0)`;
+				}
+				ctx.fillRect(i, 100, 1, -histogram[i] * scale);
+			}
+		}
+
+		function draw_angle_circle(ctx) {
+			const angle = document.getElementById("angle").value;
+			const angleRad = angle * Math.PI / 180;
+			ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+			ctx.beginPath();
+			ctx.arc(50, 50, 40, 0, 2 * Math.PI);
+			ctx.stroke();
+
+			ctx.beginPath();
+			ctx.moveTo(50, 50);
+			ctx.lineTo(50 + 40 * Math.cos(angleRad), 50 + 40 * Math.sin(angleRad));
+			ctx.stroke();
+		}
+
+
 		async function run() {
 
 			const uploadInput = document.getElementById("upload");
 			const canvas = document.getElementById("canvas");
 			const ctx = canvas.getContext("2d");
+
+			const histogramCanvas = document.getElementById("histogram");
+			const histogramCtx = histogramCanvas.getContext("2d");
 
 			// Sort on button click
 			const sortButton = document.getElementById("sort");
@@ -71,6 +256,9 @@
 						canvas.height = ogImage.height;
 
 						sort_image(ctx, ogImage);
+						gen_histogram(ctx.getImageData(0, 0, ogImage.width, ogImage.height));
+						draw_histogram(histogramCtx);
+						draw_angle_circle(document.getElementById("angleCircle").getContext("2d"));
 					};
 				};
 				reader.readAsDataURL(file);
@@ -78,6 +266,30 @@
 		}
 
 		run();
+
+		// on inversion, highlight the affected pixels in the histogram
+		const invertCheckbox = document.getElementById("invert");
+		invertCheckbox.addEventListener("change", () => {
+			const histogramCanvas = document.getElementById("histogram");
+			const histogramCtx = histogramCanvas.getContext("2d");
+			const ctx = document.getElementById("canvas").getContext("2d");
+			draw_histogram(histogramCtx);
+		});
+		// on threshold change, highlight the affected pixels in the histogram
+		const thresholdInput = document.getElementById("threshold");
+		thresholdInput.addEventListener("input", () => {
+			const histogramCanvas = document.getElementById("histogram");
+			const histogramCtx = histogramCanvas.getContext("2d");
+			const ctx = document.getElementById("canvas").getContext("2d");
+			draw_histogram(histogramCtx);
+		});
+
+		const angleInput = document.getElementById("angle");
+		const angleCircle = document.getElementById("angleCircle");
+		angleInput.addEventListener("input", () => {
+			const angleCtx = angleCircle.getContext("2d");
+			draw_angle_circle(angleCtx);
+		});
 
 	</script>
 
