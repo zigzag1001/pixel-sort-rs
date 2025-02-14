@@ -2,14 +2,15 @@
 <html lang="en">
 
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta name="description" content="Pixel Sorter, written in Rust, using WASM for browser">
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<meta name="description" content="Pixel Sorter, written in Rust, using WASM for browser" />
 	<title>Pixel Sort Rs Wasm</title>
 	<style>
 		body {
 			font-family: Arial, sans-serif;
 			text-align: center;
+			background: #c0c0c0;
 		}
 
 		#output {
@@ -17,6 +18,7 @@
 		}
 	</style>
 </head>
+
 
 <style>
 	html {
@@ -38,7 +40,7 @@
 		background: rgba(215, 215, 215, 0.3);
 		padding: 15px;
 		font-weight: bold;
-		transition: background 0.3s;
+		transition: background 0.3s, left 0.3s ease-in-out;
 	}
 
 	.controls:hover {
@@ -62,10 +64,6 @@
 		border-color: gray;
 	}
 
-	.controls .wrap input {
-		appearance: auto;
-	}
-
 	.img-container {
 		display: flex;
 		justify-content: center;
@@ -79,7 +77,10 @@
 
 	.outputimg {
 		max-width: 100%;
-		max-height: 100%;
+		max-height: 90%;
+		transform: translateY(-50%);
+		top: 50%;
+		position: absolute;
 	}
 
 	.img-container {
@@ -93,6 +94,28 @@
 		right: 90px;
 		font-size: xx-large;
 		font-weight: bold;
+	}
+
+	.sliderWithCanvas {
+		margin-right: 23px;
+	}
+
+	.sliderWithCanvas canvas {
+		max-width: 99%;
+		max-height: 75px;
+		margin-bottom: -14px;
+		margin-top: -6px;
+	}
+
+	.sliderWithCanvas input {
+		width: 100%;
+	}
+
+	.presetAngles button {
+		min-width: 0;
+		margin: 0;
+		padding: 4px;
+		zoom: 0.8;
 	}
 </style>
 
@@ -131,30 +154,103 @@
 	}
 </style>
 
-<link rel="stylesheet" href="https://unpkg.com/98.css@0.1.4/build/98.css" />
-<script src="./gif_js/gif.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/98.css" />
 
 <body>
-
-	<input type="file" id="upload" accept="image/*">
-	<input type="range" id="threshold" min="0" max="255" value="128">
-	<input type="range" id="angle" min="0" max="360" value="10">
-	<input type="checkbox" id="invert">
-	<input type="button" id="sort" value="Sort">
-	<canvas id="histogram" width="256" height="100"></canvas>
-	<canvas id="angleCircle" width="100" height="100"></canvas>
-	<canvas id="canvas" style="max-width: 100%; max-height: 100%;"></canvas>
+	<script>0</script>
+	<div class="controls">
+		<div class="imageInput highlight">
+			<label for="imageInput" class="tooltip">
+				<span class="tooltiptext">Select an image file</span>
+				Select an image:
+			</label>
+			<input type="file" id="imageInput" accept="image/*" required>
+		</div>
+		<div class="thresholdRange highlight">
+			<label for="threshold" class="tooltip">
+				<span class="tooltiptext">Threshold for pixel sorting</span>
+				Threshold:
+			</label>
+			<div class="sliderWithCanvas">
+				<canvas id="histogram" width="256" height="100"></canvas>
+				<input id="threshold" type="range" min="0" max="255" value="90" />
+				<input type="checkbox" id="invert">
+				<label for="invert" style="zoom: 1;">Invert</label>
+			</div>
+		</div>
+		<div class="angleRange highlight">
+			<label for="angle" class="tooltip">
+				<span class="tooltiptext">Angle for pixel sorting</span>
+				Angle:
+			</label>
+			<div class="sliderWithCanvas">
+				<canvas id="angleCircle" width="100" height="100"></canvas>
+				<input type="range" id="angle" min="0" max="360" value="130" />
+				<div class="presetAngles"
+					style="display: flex; justify-content: space-evenly; width: 100%;">
+					<button id="angle0">0</button>
+					<button id="angle45">45</button>
+					<button id="angle90">90</button>
+					<button id="angle135">135</button>
+					<button id="angle180">180</button>
+					<button id="angle225">225</button>
+					<button id="angle270">270</button>
+					<button id="angle315">315</button>
+					<button id="angle360">360</button>
+				</div>
+			</div>
+		</div>
+		<div class="sortButton highlight">
+			<label for="sort" class="tooltip">
+				<span class="tooltiptext">Sort the image</span>
+				Sort:
+			</label>
+			<button id="sort">Sort</button>
+		</div>
+	</div>
+	<br><br>
+	<div class="img-container">
+		<img id="outputimg" class="outputimg">
+	</div>
+	<div class="progress" id="progress"></div>
+	<!-- <canvas id="canvas" style="max-width: 100%; max-height: 100%;"></canvas> -->
 
 	<script type="module">
 
 		const pixel_sort_rs = await import('./pkg/pixel_sort_rs.js');
 		await pixel_sort_rs.default();
 
+		var controlsHover = false;
+
 		const ogCanvas = document.createElement("canvas");
 		var ogImage = new Image();
 
-		function sort_image(ctx, ogImage) {
+		ogImage.src = "./alenaaenami.webp";
+		ogImage.addEventListener("load", () => {
+			ogCanvas.width = ogImage.width;
+			ogCanvas.height = ogImage.height;
+			const ctx = ogCanvas.getContext("2d");
+			ctx.drawImage(ogImage, 0, 0);
+			document.getElementById("outputimg").src = ogCanvas.toDataURL();
+			gen_histogram(ctx.getImageData(0, 0, ogImage.width, ogImage.height));
+			draw_histogram(document.getElementById("histogram").getContext("2d"));
+			draw_angle_circle(document.getElementById("angleCircle").getContext("2d"));
+			setTimeout(function () {
+				var icont = document.querySelector('.img-container');
+				icont.style.opacity = 1;
+			}, 50);
+		});
+
+
+
+
+		function update_progress(progress) {
+			document.getElementById("progress").innerHTML = progress;
+		}
+
+		async function sort_image(ctx, ogImage) {
 			if (!ogImage.src) return;
+			update_progress("Sorting...");
 			const ogCtx = ogCanvas.getContext("2d");
 			ogCanvas.width = ogImage.width;
 			ogCanvas.height = ogImage.height;
@@ -180,6 +276,15 @@
 				ogImage.height
 			);
 			ctx.putImageData(outputImageData, 0, 0);
+			ogCanvas.toBlob((blob) => {
+				const url = URL.createObjectURL(blob);
+				document.getElementById("outputimg").src = url;
+			});
+			update_progress("Done!");
+			setTimeout(() => {
+				update_progress("");
+				slide_controls("out");
+			}, 1000);
 		}
 
 		let histogram = new Array(256).fill(0);
@@ -229,8 +334,9 @@
 
 		async function run() {
 
-			const uploadInput = document.getElementById("upload");
-			const canvas = document.getElementById("canvas");
+			const uploadInput = document.getElementById("imageInput");
+			// const canvas = document.getElementById("canvas");
+			const canvas = ogCanvas;
 			const ctx = canvas.getContext("2d");
 
 			const histogramCanvas = document.getElementById("histogram");
@@ -239,6 +345,7 @@
 			// Sort on button click
 			const sortButton = document.getElementById("sort");
 			sortButton.addEventListener("click", () => {
+				update_progress("Sorting...");
 				sort_image(ctx, ogImage);
 			});
 
@@ -246,6 +353,7 @@
 			uploadInput.addEventListener("change", async (event) => {
 				const file = event.target.files[0];
 				if (!file) return;
+				update_progress("Sorting...");
 				let threshold = document.getElementById("threshold").value;
 
 				const reader = new FileReader();
@@ -256,8 +364,10 @@
 						canvas.height = ogImage.height;
 
 						sort_image(ctx, ogImage);
+
 						gen_histogram(ctx.getImageData(0, 0, ogImage.width, ogImage.height));
 						draw_histogram(histogramCtx);
+
 						draw_angle_circle(document.getElementById("angleCircle").getContext("2d"));
 					};
 				};
@@ -272,7 +382,6 @@
 		invertCheckbox.addEventListener("change", () => {
 			const histogramCanvas = document.getElementById("histogram");
 			const histogramCtx = histogramCanvas.getContext("2d");
-			const ctx = document.getElementById("canvas").getContext("2d");
 			draw_histogram(histogramCtx);
 		});
 		// on threshold change, highlight the affected pixels in the histogram
@@ -280,7 +389,6 @@
 		thresholdInput.addEventListener("input", () => {
 			const histogramCanvas = document.getElementById("histogram");
 			const histogramCtx = histogramCanvas.getContext("2d");
-			const ctx = document.getElementById("canvas").getContext("2d");
 			draw_histogram(histogramCtx);
 		});
 
@@ -291,6 +399,40 @@
 			draw_angle_circle(angleCtx);
 		});
 
+		const presetAngles = document.querySelectorAll(".presetAngles button");
+		presetAngles.forEach((button) => {
+			button.addEventListener("click", (event) => {
+				const angle = event.target.id.replace("angle", "");
+				document.getElementById("angle").value = angle;
+				const angleCtx = angleCircle.getContext("2d");
+				draw_angle_circle(angleCtx);
+			});
+		});
+
+		function slide_controls(direction) {
+			if (controlsHover) return;
+			const controls = document.querySelector(".controls");
+			if (direction === "out") {
+				controls.style.left = "-15%";
+			} else {
+				controls.style.left = "15px";
+			}
+		}
+
+		const controls = document.querySelector(".controls");
+		controls.addEventListener("mouseenter", () => {
+			slide_controls("in")
+			setTimeout(() => {
+				controlsHover = true;
+			}, 300);
+		});
+		controls.addEventListener("mouseleave", () => {
+			controlsHover = false;
+			slide_controls("out")
+		});
+
 	</script>
 
 </body>
+
+</html>
