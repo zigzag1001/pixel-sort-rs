@@ -76,52 +76,110 @@ pub fn calculate_pixel_value(r: u8, g: u8, b: u8, mode: &str) -> f64 {
     let b = b as f64 / 255.0;
 
     match mode {
+        // luma, hue, saturation, red_green_ratio, blue_emphasis, luminance, euclidean_distance, cmy_cyan, cmy_magenta, cmy_yellow, xor, modulo
         "luma" => 0.299 * r + 0.587 * g + 0.114 * b,
-        "saturation" => {
-            let max = r.max(g).max(b);
-            let min = r.min(g).min(b);
-            if max == 0.0 {
-                0.0
-            } else {
-                (max - min) / max
-            }
-        }
         "hue" => {
             let max = r.max(g).max(b);
             let min = r.min(g).min(b);
-            let delta = max - min;
-
-            // if delta == 0.0 {
-            //     0.0
-            // } else if max == r {
-            //     (60.0 * ((g - b) / delta) + 360.0) % 360.0
-            // } else if max == g {
-            //     60.0 * ((b - r) / delta) + 120.0
-            // } else {
-            //     60.0 * ((r - g) / delta) + 240.0
-            // }
-            if delta == 0.0 {
+            if max == min {
                 0.0
             } else if max == r {
-                (60.0 * ((g - b) / delta) % 360.0) / 360.0
+                ((g - b) / (max - min) + if g < b { 6.0 } else { 0.0 }) / 6.0
             } else if max == g {
-                (60.0 * ((b - r) / delta) + 120.0) / 360.0
+                ((b - r) / (max - min) + 2.0) / 6.0
             } else {
-                (60.0 * ((r - g) / delta) + 240.0) / 360.0
+                ((r - g) / (max - min) + 4.0) / 6.0
             }
         }
-        "chroma" => {
+        "saturation" => {
             let max = r.max(g).max(b);
             let min = r.min(g).min(b);
-            max - min
+            if max == 0.0 { 0.0 } else { (max - min) / max }
         }
-        "colorfulness" => {
-            let mean = (r + g + b) / 3.0;
-            ((r - mean).powi(2) + (g - mean).powi(2) + (b - mean).powi(2)).sqrt()
+        "red_green_ratio" => {
+            if g > 0.0 { (r / g).min(1.0) } else { 1.0 }
         }
-        &_ => 0.0,
+        "blue_emphasis" => {
+            ((b - (r + g) / 2.0) + 1.0) / 2.0
+        }
+        "luminance" => {
+            (0.2126 * r + 0.7152 * g + 0.0722 * b).min(1.0)
+        }
+        "euclidean_distance" => {
+            ((r - 1.0).powi(2) + g.powi(2) + b.powi(2)).sqrt() / (3.0f64).sqrt()
+        }
+        "cmy_cyan" => {
+            1.0 - r
+        }
+        "cmy_magenta" => {
+            1.0 - g
+        }
+        "cmy_yellow" => {
+            1.0 - b
+        }
+        "xor" => {
+            (((r * 255.0) as u8 ^ (g * 255.0) as u8 ^ (b * 255.0) as u8) as f64) / 255.0
+        }
+        "modulo" => {
+            ((r * 255.0 + g * 255.0 + b * 255.0) % 10.0) as f64 / 10.0
+        }
+        _ => 0.0,
     }
 }
+
+// #[wasm_bindgen]
+// pub fn calculate_pixel_value(r: u8, g: u8, b: u8, mode: &str) -> f64 {
+//     let r = r as f64 / 255.0;
+//     let g = g as f64 / 255.0;
+//     let b = b as f64 / 255.0;
+//
+//     match mode {
+//         "luma" => 0.299 * r + 0.587 * g + 0.114 * b,
+//         "saturation" => {
+//             let max = r.max(g).max(b);
+//             let min = r.min(g).min(b);
+//             if max == 0.0 {
+//                 0.0
+//             } else {
+//                 (max - min) / max
+//             }
+//         }
+//         "hue" => {
+//             let max = r.max(g).max(b);
+//             let min = r.min(g).min(b);
+//             let delta = max - min;
+//
+//             // if delta == 0.0 {
+//             //     0.0
+//             // } else if max == r {
+//             //     (60.0 * ((g - b) / delta) + 360.0) % 360.0
+//             // } else if max == g {
+//             //     60.0 * ((b - r) / delta) + 120.0
+//             // } else {
+//             //     60.0 * ((r - g) / delta) + 240.0
+//             // }
+//             if delta == 0.0 {
+//                 0.0
+//             } else if max == r {
+//                 (60.0 * ((g - b) / delta) % 360.0) / 360.0
+//             } else if max == g {
+//                 (60.0 * ((b - r) / delta) + 120.0) / 360.0
+//             } else {
+//                 (60.0 * ((r - g) / delta) + 240.0) / 360.0
+//             }
+//         }
+//         "chroma" => {
+//             let max = r.max(g).max(b);
+//             let min = r.min(g).min(b);
+//             max - min
+//         }
+//         "colorfulness" => {
+//             let mean = (r + g + b) / 3.0;
+//             ((r - mean).powi(2) + (g - mean).powi(2) + (b - mean).powi(2)).sqrt()
+//         }
+//         &_ => 0.0,
+//     }
+// }
 
 // function to sort an array of pixels given a list of coordinates
 // fn sort_array(data: &mut [u8], width: usize, height: usize, coords: Vec<(usize, usize)>) {

@@ -173,12 +173,28 @@
 			</label>
 			<div class="sliderWithCanvas">
 				<canvas id="histogram" width="256" height="100"></canvas>
-				<input id="threshold" type="range" min="0" max="255" value="90" />
+				<input id="threshold" type="range" min="0" max="256" value="90" />
 				<select id="mode" value="luma">
+					<!-- // hue, saturation, red_green_ratio, blue_emphasis, luminance, euclidean_distance, cmy_cyan, cmy_magenta, cmy_yellow, xor, modulo -->
 					<option value="luma">Luma</option>
-					<option value="saturation">Saturation</option>
 					<option value="hue">Hue</option>
-					<option value="colorfulness">Colorfulness</option>
+					<option value="saturation">Saturation</option>
+					<option value="red_green_ratio">Red Green Ratio</option>
+					<option value="blue_emphasis">Blue Emphasis</option>
+					<option value="luminance">Luminance</option>
+					<option value="euclidean_distance">Euclidean Distance</option>
+					<option value="cmy_cyan">CMY Cyan</option>
+					<option value="cmy_magenta">CMY Magenta</option>
+					<option value="cmy_yellow">CMY Yellow</option>
+					<option value="xor">XOR</option>
+					<option value="modulo">Modulo</option>
+
+
+					<!-- luma, saturation, hue, colorfulness -->
+					<!-- <option value="luma">Luma</option> -->
+					<!-- <option value="saturation">Saturation</option> -->
+					<!-- <option value="hue">Hue</option> -->
+					<!-- <option value="colorfulness">Colorfulness</option> -->
 				</select>
 				<input type="checkbox" id="invert">
 				<label for="invert" style="zoom: 1;">Invert</label>
