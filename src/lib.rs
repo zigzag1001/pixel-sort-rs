@@ -69,20 +69,92 @@ fn set_pixel(data: &mut [u8], width: usize, x: usize, y: usize, pixel: [u8; 4]) 
     data[idx + 3] = pixel[3];
 }
 
+#[wasm_bindgen]
+pub fn calculate_pixel_value(r: u8, g: u8, b: u8, mode: &str) -> f64 {
+    let r = r as f64 / 255.0;
+    let g = g as f64 / 255.0;
+    let b = b as f64 / 255.0;
+
+    match mode {
+        "luma" => 0.299 * r + 0.587 * g + 0.114 * b,
+        "saturation" => {
+            let max = r.max(g).max(b);
+            let min = r.min(g).min(b);
+            if max == 0.0 {
+                0.0
+            } else {
+                (max - min) / max
+            }
+        }
+        "hue" => {
+            let max = r.max(g).max(b);
+            let min = r.min(g).min(b);
+            let delta = max - min;
+
+            // if delta == 0.0 {
+            //     0.0
+            // } else if max == r {
+            //     (60.0 * ((g - b) / delta) + 360.0) % 360.0
+            // } else if max == g {
+            //     60.0 * ((b - r) / delta) + 120.0
+            // } else {
+            //     60.0 * ((r - g) / delta) + 240.0
+            // }
+            if delta == 0.0 {
+                0.0
+            } else if max == r {
+                (60.0 * ((g - b) / delta) % 360.0) / 360.0
+            } else if max == g {
+                (60.0 * ((b - r) / delta) + 120.0) / 360.0
+            } else {
+                (60.0 * ((r - g) / delta) + 240.0) / 360.0
+            }
+        }
+        "chroma" => {
+            let max = r.max(g).max(b);
+            let min = r.min(g).min(b);
+            max - min
+        }
+        "colorfulness" => {
+            let mean = (r + g + b) / 3.0;
+            ((r - mean).powi(2) + (g - mean).powi(2) + (b - mean).powi(2)).sqrt()
+        }
+        &_ => 0.0,
+    }
+}
+
 // function to sort an array of pixels given a list of coordinates
-fn sort_array(data: &mut [u8], width: usize, height: usize, coords: Vec<(usize, usize)>) {
+// fn sort_array(data: &mut [u8], width: usize, height: usize, coords: Vec<(usize, usize)>) {
+//     if coords.len() == 0 {
+//         return;
+//     } else if coords.len() == 1 {
+//         return;
+//     }
+//
+//     let mut pixels = Vec::new();
+//     for (x, y) in coords.iter() {
+//         pixels.push(get_pixel(data, width, *x, *y));
+//     }
+//     pixels.sort_by_key(|pixel| pixel[0]);
+//
+//     for ((x, y), pixel) in coords.iter().zip(pixels.iter()) {
+//         set_pixel(data, width, *x, *y, *pixel);
+//     }
+// }
+fn sort_array(data: &mut [u8], width: usize, height: usize, coords: Vec<(usize, usize)>, mode: &str) {
     if coords.len() == 0 {
         return;
     } else if coords.len() == 1 {
         return;
     }
-
     let mut pixels = Vec::new();
     for (x, y) in coords.iter() {
-        pixels.push(get_pixel(data, width, *x, *y));
+        let pixel = get_pixel(data, width, *x, *y);
+        let value = calculate_pixel_value(pixel[0], pixel[1], pixel[2], mode);
+        pixels.push((value, pixel));
     }
-    pixels.sort_by_key(|pixel| pixel[0]);
-    for ((x, y), pixel) in coords.iter().zip(pixels.iter()) {
+    pixels.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    for ((x, y), (_, pixel)) in coords.iter().zip(pixels.iter()) {
         set_pixel(data, width, *x, *y, *pixel);
     }
 }
@@ -90,14 +162,15 @@ fn sort_array(data: &mut [u8], width: usize, height: usize, coords: Vec<(usize, 
 // break up array based on brightness
 // keep adding pixels to the current array until the brightness is less than the threshold
 // then start a new array
-fn break_array(data: &[u8], width: usize, height: usize, coords: Vec<(usize, usize)>, threshold: u16, invert: bool) -> Vec<Vec<(usize, usize)>> {
+fn break_array(data: &[u8], width: usize, height: usize, coords: Vec<(usize, usize)>, threshold: u16, invert: bool, mode: &str) -> Vec<Vec<(usize, usize)>> {
     let mut arrays = Vec::new();
     let mut current_array = Vec::new();
     if invert {
         for (x, y) in coords.iter() {
             let pixel = get_pixel(data, width, *x, *y);
-            let brightness = (pixel[0] as u16 + pixel[1] as u16 + pixel[2] as u16) / 3;
-            if brightness >= threshold {
+            // let brightness = (pixel[0] as u16 + pixel[1] as u16 + pixel[2] as u16) / 3;
+            let pixel_value = (calculate_pixel_value(pixel[0], pixel[1], pixel[2], mode) * 255.0) as u16;
+            if pixel_value >= threshold {
                 if current_array.len() > 0 {
                     arrays.push(current_array);
                     current_array = Vec::new();
@@ -109,8 +182,9 @@ fn break_array(data: &[u8], width: usize, height: usize, coords: Vec<(usize, usi
     } else {
         for (x, y) in coords.iter() {
             let pixel = get_pixel(data, width, *x, *y);
-            let brightness = (pixel[0] as u16 + pixel[1] as u16 + pixel[2] as u16) / 3;
-            if brightness < threshold {
+            // let brightness = (pixel[0] as u16 + pixel[1] as u16 + pixel[2] as u16) / 3;
+            let pixel_value = (calculate_pixel_value(pixel[0], pixel[1], pixel[2], mode) * 255.0) as u16;
+            if pixel_value < threshold {
                 if current_array.len() > 0 {
                     arrays.push(current_array);
                     current_array = Vec::new();
@@ -209,18 +283,20 @@ pub struct SortConfig {
     threshold: u16,
     angle: u16,
     invert: bool,
+    mode: String,
 }
 
 #[wasm_bindgen]
 impl SortConfig {
     #[wasm_bindgen(constructor)]
-    pub fn new(width: usize, height: usize, threshold: u16, angle: u16, invert: bool) -> Self {
+    pub fn new(width: usize, height: usize, threshold: u16, angle: u16, invert: bool, mode: String) -> Self {
         Self {
             width,
             height,
             threshold,
             angle,
             invert,
+            mode,
         }
     }
 }
@@ -232,6 +308,7 @@ pub fn sort(data: &[u8], config: &SortConfig) -> Vec<u8> {
     let threshold = config.threshold;
     let angle = config.angle; // 0 - 360
     let invert = config.invert;
+    let mode = &config.mode;
 
     let mut finished = vec![0; data.len()]; // Create a new buffer
 
@@ -239,9 +316,9 @@ pub fn sort(data: &[u8], config: &SortConfig) -> Vec<u8> {
 
     let bresenham = rotate_grid(width, height, angle);
     for array in bresenham.iter() {
-        let broken = break_array(&finished, width, height, array.clone(), threshold, invert);
+        let broken = break_array(&finished, width, height, array.clone(), threshold, invert, mode);
         for broken_array in broken.iter() {
-            sort_array(&mut finished, width, height, broken_array.clone());
+            sort_array(&mut finished, width, height, broken_array.clone(), mode);
         }
     }
 

@@ -174,6 +174,12 @@
 			<div class="sliderWithCanvas">
 				<canvas id="histogram" width="256" height="100"></canvas>
 				<input id="threshold" type="range" min="0" max="255" value="90" />
+				<select id="mode" value="luma">
+					<option value="luma">Luma</option>
+					<option value="saturation">Saturation</option>
+					<option value="hue">Hue</option>
+					<option value="colorfulness">Colorfulness</option>
+				</select>
 				<input type="checkbox" id="invert">
 				<label for="invert" style="zoom: 1;">Invert</label>
 			</div>
@@ -225,6 +231,34 @@
 		const ogCanvas = document.createElement("canvas");
 		var ogImage = new Image();
 
+		let SortConfig_js = {
+			width: 0,
+			height: 0,
+			threshold: 0,
+			angle: 0,
+			invert: false,
+			mode: "luma",
+		};
+		let SortConfig = new pixel_sort_rs.SortConfig(0, 0, 0, 0, false, "luma");
+		function update_config() {
+			SortConfig = new pixel_sort_rs.SortConfig(
+				ogImage.width,
+				ogImage.height,
+				document.getElementById("threshold").value,
+				document.getElementById("angle").value,
+				document.getElementById("invert").checked,
+				document.getElementById("mode").value
+			);
+			SortConfig_js = {
+				width: ogImage.width,
+				height: ogImage.height,
+				threshold: document.getElementById("threshold").value,
+				angle: document.getElementById("angle").value,
+				invert: document.getElementById("invert").checked,
+				mode: document.getElementById("mode").value,
+			};
+		}
+
 		ogImage.src = "./alenaaenami.webp";
 		ogImage.addEventListener("load", () => {
 			ogCanvas.width = ogImage.width;
@@ -262,13 +296,9 @@
 			const invert = document.getElementById("invert").checked;
 
 			console.log(angle);
-			const SortConfig = new pixel_sort_rs.SortConfig(
-				ogImage.width,
-				ogImage.height,
-				threshold,
-				angle,
-				invert
-			);
+
+			update_config();
+
 			const flippedData = pixel_sort_rs.sort(ogImageData.data, SortConfig);
 			const outputImageData = new ImageData(
 				new Uint8ClampedArray(flippedData),
@@ -283,7 +313,6 @@
 			update_progress("Done!");
 			setTimeout(() => {
 				update_progress("");
-				slide_controls("out");
 			}, 1000);
 		}
 
@@ -293,8 +322,13 @@
 		function gen_histogram(imageData) {
 			histogram = new Array(256).fill(0);
 			for (let i = 0; i < imageData.data.length; i += 4) {
-				const luma = 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2];
-				histogram[Math.floor(luma)]++;
+				// const luma = 0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2];
+				const r = imageData.data[i];
+				const g = imageData.data[i + 1];
+				const b = imageData.data[i + 2];
+				let pixel_value = pixel_sort_rs.calculate_pixel_value(r, g, b, SortConfig_js.mode);
+				pixel_value *= 255;
+				histogram[Math.floor(pixel_value)]++;
 			}
 		}
 
@@ -344,7 +378,7 @@
 
 			// Sort on button click
 			const sortButton = document.getElementById("sort");
-			sortButton.addEventListener("click", () => {
+			sortButton.addEventListener("click", async () => {
 				update_progress("Sorting...");
 				sort_image(ctx, ogImage);
 			});
@@ -389,6 +423,14 @@
 		thresholdInput.addEventListener("input", () => {
 			const histogramCanvas = document.getElementById("histogram");
 			const histogramCtx = histogramCanvas.getContext("2d");
+			draw_histogram(histogramCtx);
+		});
+		const modeSelect = document.getElementById("mode");
+		modeSelect.addEventListener("change", () => {
+			update_config();
+			const histogramCanvas = document.getElementById("histogram");
+			const histogramCtx = histogramCanvas.getContext("2d");
+			gen_histogram(ogCanvas.getContext("2d").getImageData(0, 0, ogImage.width, ogImage.height));
 			draw_histogram(histogramCtx);
 		});
 
