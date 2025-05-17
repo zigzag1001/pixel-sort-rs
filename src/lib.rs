@@ -342,12 +342,13 @@ pub struct SortConfig {
     angle: u16,
     invert: bool,
     mode: String,
+    StackOutput: bool,
 }
 
 #[wasm_bindgen]
 impl SortConfig {
     #[wasm_bindgen(constructor)]
-    pub fn new(width: usize, height: usize, threshold: u16, angle: u16, invert: bool, mode: String) -> Self {
+    pub fn new(width: usize, height: usize, threshold: u16, angle: u16, invert: bool, mode: String, StackOutput: bool) -> Self {
         Self {
             width,
             height,
@@ -355,6 +356,7 @@ impl SortConfig {
             angle,
             invert,
             mode,
+            StackOutput
         }
     }
 }
@@ -367,6 +369,7 @@ pub fn sort(data: &[u8], config: &SortConfig) -> Vec<u8> {
     let angle = config.angle; // 0 - 360
     let invert = config.invert;
     let mode = &config.mode;
+    let StackOutput = config.StackOutput;
 
     let mut finished = vec![0; data.len()]; // Create a new buffer
 

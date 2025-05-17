@@ -98,6 +98,14 @@
 		font-weight: bold;
 	}
 
+	.inputContainer {
+		margin-right: 23px;
+	}
+
+	.inputContainer input {
+		width: 100%;
+	}
+
 	.sliderWithCanvas {
 		margin-right: 23px;
 	}
@@ -166,7 +174,13 @@
 				<span class="tooltiptext">Select an image file</span>
 				Select an image:
 			</label>
-			<input type="file" id="imageInput" accept="image/*" required>
+			<div class="inputContainer">
+				<input type="file" id="imageInput" accept="image/*" required
+					data-umami-event="Upload" />
+				<input type="checkbox" id="StackOutput">
+				<label for="StackOutput" style="zoom: 1;">Stack Output</label>
+				<button id="reset">Reset</button>
+			</div>
 		</div>
 		<div class="thresholdRange highlight">
 			<label for="threshold" class="tooltip">
@@ -191,12 +205,6 @@
 					<option value="xor">XOR</option>
 					<option value="modulo">Modulo</option>
 
-
-					<!-- luma, saturation, hue, colorfulness -->
-					<!-- <option value="luma">Luma</option> -->
-					<!-- <option value="saturation">Saturation</option> -->
-					<!-- <option value="hue">Hue</option> -->
-					<!-- <option value="colorfulness">Colorfulness</option> -->
 				</select>
 				<input type="checkbox" id="invert">
 				<label for="invert" style="zoom: 1;">Invert</label>
@@ -248,6 +256,7 @@
 
 		const ogCanvas = document.createElement("canvas");
 		var ogImage = new Image();
+		var workImage = new Image();
 
 		let SortConfig_js = {
 			width: 0,
@@ -256,35 +265,39 @@
 			angle: 0,
 			invert: false,
 			mode: "luma",
+			StackOutput: false,
 		};
-		let SortConfig = new pixel_sort_rs.SortConfig(0, 0, 0, 0, false, "luma");
+		let SortConfig = new pixel_sort_rs.SortConfig(0, 0, 0, 0, false, "luma", false);
 		function update_config() {
 			SortConfig = new pixel_sort_rs.SortConfig(
-				ogImage.width,
-				ogImage.height,
+				workImage.width,
+				workImage.height,
 				document.getElementById("threshold").value,
 				document.getElementById("angle").value,
 				document.getElementById("invert").checked,
-				document.getElementById("mode").value
+				document.getElementById("mode").value,
+				document.getElementById("StackOutput").checked
 			);
 			SortConfig_js = {
-				width: ogImage.width,
-				height: ogImage.height,
+				width: workImage.width,
+				height: workImage.height,
 				threshold: document.getElementById("threshold").value,
 				angle: document.getElementById("angle").value,
 				invert: document.getElementById("invert").checked,
 				mode: document.getElementById("mode").value,
+				StackOutput: document.getElementById("StackOutput").checked,
 			};
 		}
 
 		ogImage.src = "./alenaaenami.webp";
-		ogImage.addEventListener("load", () => {
-			ogCanvas.width = ogImage.width;
-			ogCanvas.height = ogImage.height;
+		workImage.src = ogImage.src;
+		workImage.addEventListener("load", () => {
+			ogCanvas.width = workImage.width;
+			ogCanvas.height = workImage.height;
 			const ctx = ogCanvas.getContext("2d");
-			ctx.drawImage(ogImage, 0, 0);
+			ctx.drawImage(workImage, 0, 0);
 			document.getElementById("outputimg").src = ogCanvas.toDataURL();
-			gen_histogram(ctx.getImageData(0, 0, ogImage.width, ogImage.height));
+			gen_histogram(ctx.getImageData(0, 0, workImage.width, workImage.height));
 			draw_histogram(document.getElementById("histogram").getContext("2d"));
 			draw_angle_circle(document.getElementById("angleCircle").getContext("2d"));
 			setTimeout(function () {
@@ -300,14 +313,14 @@
 			document.getElementById("progress").innerHTML = progress;
 		}
 
-		async function sort_image(ctx, ogImage) {
-			if (!ogImage.src) return;
+		async function sort_image(ctx, workImage) {
+			if (!workImage.src) return;
 			update_progress("Sorting...");
 			const ogCtx = ogCanvas.getContext("2d");
-			ogCanvas.width = ogImage.width;
-			ogCanvas.height = ogImage.height;
-			ogCtx.drawImage(ogImage, 0, 0);
-			const ogImageData = ogCtx.getImageData(0, 0, ogImage.width, ogImage.height);
+			ogCanvas.width = workImage.width;
+			ogCanvas.height = workImage.height;
+			ogCtx.drawImage(workImage, 0, 0);
+			const workImageData = ogCtx.getImageData(0, 0, workImage.width, workImage.height);
 
 			const threshold = document.getElementById("threshold").value;
 			const angle = document.getElementById("angle").value;
@@ -317,21 +330,32 @@
 
 			update_config();
 
-			const flippedData = pixel_sort_rs.sort(ogImageData.data, SortConfig);
+			const flippedData = pixel_sort_rs.sort(workImageData.data, SortConfig);
 			const outputImageData = new ImageData(
 				new Uint8ClampedArray(flippedData),
-				ogImage.width,
-				ogImage.height
+				workImage.width,
+				workImage.height
 			);
 			ctx.putImageData(outputImageData, 0, 0);
 			ogCanvas.toBlob((blob) => {
 				const url = URL.createObjectURL(blob);
-				document.getElementById("outputimg").src = url;
+				// document.getElementById("outputimg").src = url;
+				if (SortConfig_js.StackOutput) {
+					workImage.src = url;
+					workImage.onload = async function () {
+						update_progress("Done!");
+						setTimeout(() => {
+							update_progress("");
+						}, 1000);
+					};
+				} else {
+					document.getElementById("outputimg").src = url;
+					update_progress("Done!");
+					setTimeout(() => {
+						update_progress("");
+					}, 1000);
+				}
 			});
-			update_progress("Done!");
-			setTimeout(() => {
-				update_progress("");
-			}, 1000);
 		}
 
 		let histogram = new Array(256).fill(0);
@@ -387,18 +411,38 @@
 		async function run() {
 
 			const uploadInput = document.getElementById("imageInput");
-			// const canvas = document.getElementById("canvas");
 			const canvas = ogCanvas;
 			const ctx = canvas.getContext("2d");
 
 			const histogramCanvas = document.getElementById("histogram");
 			const histogramCtx = histogramCanvas.getContext("2d");
 
+			workImage.src = ogImage.src;
+
 			// Sort on button click
 			const sortButton = document.getElementById("sort");
 			sortButton.addEventListener("click", async () => {
 				update_progress("Sorting...");
-				sort_image(ctx, ogImage);
+				sort_image(ctx, workImage);
+			});
+
+			// Reset work image to original
+			const resetButton = document.getElementById("reset");
+			resetButton.addEventListener("click", async () => {
+				update_progress("Loading Image...");
+				workImage.src = ogImage.src;
+				workImage.onload = async function () {
+					canvas.width = workImage.width;
+					canvas.height = workImage.height;
+					ctx.drawImage(workImage, 0, 0);
+					gen_histogram(ctx.getImageData(0, 0, workImage.width, workImage.height));
+					draw_histogram(histogramCtx);
+					draw_angle_circle(document.getElementById("angleCircle").getContext("2d"));
+					update_progress("Loaded!");
+					setTimeout(() => {
+						update_progress("");
+					}, 1000);
+				};
 			});
 
 			// Sort on file upload
@@ -409,18 +453,22 @@
 				let threshold = document.getElementById("threshold").value;
 
 				const reader = new FileReader();
+				update_progress("Uploading Image...");
 				reader.onload = async function (e) {
 					ogImage.src = e.target.result;
-					ogImage.onload = async function () {
-						canvas.width = ogImage.width;
-						canvas.height = ogImage.height;
+					update_progress("Loading Image...");
+					workImage.src = e.target.result;
+					workImage.onload = async function () {
+						canvas.width = workImage.width;
+						canvas.height = workImage.height;
 
-						sort_image(ctx, ogImage);
+						sort_image(ctx, workImage);
 
-						gen_histogram(ctx.getImageData(0, 0, ogImage.width, ogImage.height));
+						gen_histogram(ctx.getImageData(0, 0, workImage.width, workImage.height));
 						draw_histogram(histogramCtx);
 
 						draw_angle_circle(document.getElementById("angleCircle").getContext("2d"));
+						workImage.onload = null;
 					};
 				};
 				reader.readAsDataURL(file);
@@ -448,7 +496,7 @@
 			update_config();
 			const histogramCanvas = document.getElementById("histogram");
 			const histogramCtx = histogramCanvas.getContext("2d");
-			gen_histogram(ogCanvas.getContext("2d").getImageData(0, 0, ogImage.width, ogImage.height));
+			gen_histogram(ogCanvas.getContext("2d").getImageData(0, 0, workImage.width, workImage.height));
 			draw_histogram(histogramCtx);
 		});
 
